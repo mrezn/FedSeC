@@ -2,9 +2,9 @@
 
 ## <font face="Consolas">1 Introduce</font> 
 
-<font face="Consolas">This repository records the algorithm for federated average.
+<font face="Consolas">This repository records the algorithm for FedSecure method.
 
-The implementation is pytorch.</font> 
+The implementation is python on Cifar10 and Mnist datasets.</font> 
 
 
 
@@ -16,6 +16,5 @@ The implementation is pytorch.</font>
 
 ## <font face="Consolas">3 how to change</font> 
 
-<font face="Consolas">if you want check the default data, you can change the **getData.py**.
-And if you want change the model in Federated Learning, you just need to change the **net.py** in the model folder.
-See **main.py** for communication rounds and other variables</font>
+<font face="Consolas">if you want change the model architecture in clients, you just need to change the **net.py** in the model folder.
+See **main.py** for communication rounds and other config</font>

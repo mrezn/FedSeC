@@ -63,5 +63,3 @@ class GetDataSet():
         else:
             print("Not valid dataset name!")
 
-        # self.trainData = DataLoader(trainingData, batch_size=self.trainDataSize)
-        # self.testData = DataLoader(testData, batch_size=self.testDataSize)
