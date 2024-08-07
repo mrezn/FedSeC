@@ -13,7 +13,7 @@ from copy import deepcopy
 
 
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, description="FedAvg")
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-g', '--gpu', type=str, default='0', help='gpu id to use(e.g. 0,1,2,3)')
 
 parser.add_argument('-nc', '--num_of_clients', type=int, default=3, help='numer of the clients')
@@ -25,17 +25,19 @@ parser.add_argument('-E', '--epoch', type=int, default=5, help='local train epoc
 
 parser.add_argument('-B', '--batchsize', type=int, default=10, help='local train batch size')
 
-parser.add_argument('-mn', '--model_name', type=str, default='mnist_cnn', help='the model to train')
+parser.add_argument('-mn', '--model_name', type=str, default='cnn', help='the model to train')
 
 parser.add_argument('-lr', "--learning_rate", type=float, default=0.01, help="learning rate, \
                     use value from origin paper as default")
-parser.add_argument('-dataset', "--dataset", type=str, default="mnist", help="需要训练的数据集")
+parser.add_argument('-dataset', "--dataset", type=str, default="MNIST", help='CIFAR10 or MNIST')
 
 parser.add_argument('-vf', "--val_freq", type=int, default=5, help="model validation frequency(of communications)")
 parser.add_argument('-sf', '--save_freq', type=int, default=20, help='global model save frequency(of communication)')
 
 parser.add_argument('-ncomm', '--num_comm', type=int, default=10, help='number of communications')
 parser.add_argument('-sp', '--save_path', type=str, default='./checkpoints', help='the saving path of checkpoints')
+
+parser.add_argument('-m', '--W_size', type=int, default=5, help='the W space size')
 
 parser.add_argument('-sigma', '--sigma_value', type=int, default=0.1, help='the value of sigma for optimatization')
 
@@ -67,19 +69,21 @@ if __name__ == "__main__":
 
     dev = torch.device("cpu")
 
+    # m=args['W_size']
     sigma=args['sigma_value']
 
     net = None
 
 
-    if args['model_name'] == 'mnist_cnn':
+    if args['model_name'] == 'cnn':
         net = Net()
     else:
         pass
 
-
+    dataset=args['dataset']
     loss_func = F.cross_entropy
 
+    # opti = optim.SGD(net.parameters(), lr=args['learning_rate'])
 
 
 
@@ -88,13 +92,25 @@ if __name__ == "__main__":
     global_parameters = {}
 
     for key, var in net.state_dict().items():
+        # print(str(var.shape))
+        # print(str(var.size()))
         global_parameters[key] = var.clone()
 
     m=calculate_M(net)
+#     state_dict_ = net.state_dict()
+#     weights = {key: value for key, value in state_dict_.items() if 'weight' in key}
 
-    lambda_k =torch.zeros(2*m*(args['num_of_clients']-1))
+# # Print the weights
+#     for key, weight in weights.items():
+#         print(f"Layer: {key}, Weights: {weight.shape}")
+#     # print(global_parameters)
+#     art=input()
+
+    lambda_k =torch.zeros(2*m*(args['num_of_clients']-1))# {name: torch.zeros_like(param) for name, param in net.named_parameters()}
+    # weights={name: param.data.clone() for name, param in net.named_parameters()}
     
-    myClients = ClientsGroup('MNIST', args['num_of_clients'], dev,net,global_parameters,loss_func,args['epoch'],args['batchsize'],m,args['learning_rate'],sigma)
+    
+    myClients = ClientsGroup(dataset, args['num_of_clients'], dev,net,global_parameters,loss_func,args['epoch'],args['batchsize'],m,args['learning_rate'],sigma)
     # testDataLoader = myClients.testDataLoader
 
 
@@ -104,7 +120,15 @@ if __name__ == "__main__":
         print("communicate round {}".format(i + 1))
 
         order = np.random.permutation(args['num_of_clients'])
+        # print("order:")
+        # print(len(order))
+        # print(order)
         clients_in_comm = ['client{}'.format(i) for i in order[0:num_in_comm]]
+
+        # print(str(clients_in_comm))
+        # print(type(clients_in_comm))  
+
+        # sum_parameters = None
         y_k_plus_1_list = []
         lambda_k_plus_1_list = []
         ACC_list=[]
@@ -112,11 +136,18 @@ if __name__ == "__main__":
             
             if i==0:
                 y_k = myClients.init_y_k[client]
+            # local_parameters = myClients.clients_set[client].localModelUpdate(lambda_k,y_k)
             y_k_plus_1, lambda_k_plus_1 , ACC  =myClients.clients_set[client].localModelUpdate(lambda_k,y_k)
             y_k_plus_1_list.append(y_k_plus_1)
             lambda_k_plus_1_list.append(lambda_k_plus_1)
             ACC_list.append(ACC)
-
+            # if sum_parameters is None:
+            #     sum_parameters = {}
+            #     for key, var in local_parameters.items():
+            #         sum_parameters[key] = var.clone()
+            # else:
+            #     for var in sum_parameters:
+            #         sum_parameters[var] = sum_parameters[var] + local_parameters[var]
         avg_y_k_plus_1 = deepcopy(y_k_plus_1_list[0])
         avg_lambda_k_plus_1 = deepcopy(lambda_k_plus_1_list[0])
         avg_acc= deepcopy(ACC_list[0])
@@ -134,6 +165,42 @@ if __name__ == "__main__":
         lambda_k =  avg_lambda_k_plus_1
         y_k =  avg_y_k_plus_1
 
+        # for var in global_parameters:
+        #     global_parameters[var] = (sum_parameters[var] / num_in_comm)
+        ###############################################################################################################
+        # grad_f = {name: param.grad.clone() for name, param in net.named_parameters()}
+        # weights_ = {name: param.data.clone() for name, param in net.named_parameters()}
+        # u_k = {name: grad_f[name] + avg_lambda_k_plus_1[name] for name in grad_f}
+        # w_k_plus_1 = {name: weights_[name] - args['learning_rate'] * u_k[name] for name in weights_}
+        # with torch.no_grad():
+        #     for name, param in net.named_parameters():
+        #         param.copy_(w_k_plus_1[name])
+
+
+
+        # # net.load_state_dict(global_parameters, strict=True)
+        # sum_accu = 0
+        # num = 0
+        # for data, label in testDataLoader:
+        #     data, label = data.to(dev), label.to(dev)
+        #     preds = net(data)
+        #     preds = torch.argmax(preds, dim=1)
+        #     sum_accu += (preds == label).float().mean()
+        #     num += 1
+        # print("\n" + 'accuracy: {}'.format(sum_accu / num))
+
+        test_txt.write("communicate round " + str(i + 1) + "  ")
+        test_txt.write('average accuracy: ' + str(float(avg_acc)) + "\n")
         print('average accuracy: ' + str(float(avg_acc)) + "\n")
+
+        # if (i + 1) % args['save_freq'] == 0:
+        #     torch.save(net, os.path.join(args['save_path'],
+        #                                  '{}_num_comm{}_E{}_B{}_lr{}_num_clients{}_cf{}'.format(args['model_name'],
+        #                                                                                         i, args['epoch'],
+        #                                                                                         args['batchsize'],
+        #                                                                                         args['learning_rate'],
+        #                                                                                         args['num_of_clients'],
+        #                                                                                         args['cfraction'])))
+
     test_txt.close()
 

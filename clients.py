@@ -75,24 +75,53 @@ class Client():
                 return True 
             
     def localModelUpdate(self,lambda_k,y_k):
+
+
+        # model.load_state_dict(globalPara, strict=True)
+        # lambda_k = {name: torch.zeros_like(param) for name, param in self.model.named_parameters()}
+        # client_weight_vector_k=ClientsGroup.creat_weight_vector(self.model,self.m)
+        # client_G_weight_k, _ =ClientsGroup.creat_g_matrix(self.client_ID, self.clientsNum,self.m,client_weight_vector_k)
+        # client_G_weight_k=ClientsGroup.set_value_g_weight(self.clientsNum,self.m,client_G_vector_k,client_weight_vector_k)
+
         self.trainDataLoader = DataLoader(self.trainDataSet, batch_size=self.localBatchSize, shuffle=True)
         lambda_k_weight = self.creat_lamda_weight_shape(lambda_k)
+        # print(self.check_new_lamda(lambda_k_weight,lambda_k))
+        # art=input("*"*80)
+        
         for i in range(self.localEpoch):
             for X, y in self.trainDataLoader:
+          
                 self.opti.zero_grad()
                 X, y = X.to(self.device), y.to(self.device)
+
                 pred = self.model(X)
+
                 loss = self.lossFun(pred, y)
                 loss.backward()
                 self.opti.step(lambda_k_weight)
- 
-        v_k = y_k - (self.sigma*self.alpha*lambda_k)
+                
+        # weights = self.get_weights()
+        # grad_f = self.get_gradients()
+
+
+
+        # lambda_grad_product = {name: torch.mul(param.grad, lambda_k[name]) for name, param in self.model.named_parameters()}
+
+        # u_k = {name: grad_f[name] + lambda_grad_product[name] for name in grad_f}
         
-        lambda_k_plus_1 = lambda_k + self.alpha*v_k
+        # y_k = {name: self.m * weights[name] for name in weights}
+        
+        v_k = y_k - (self.sigma*self.alpha*lambda_k) # {name: y_k[name] - self.sigma * self.alpha * lambda_k[name] for name in y_k}
+        
+        # w_k_plus_1 = {name: weights[name] - self.alpha * u_k[name] for name in weights}
+        
+        lambda_k_plus_1 = lambda_k + self.alpha*v_k#{name: lambda_k[name] + self.alpha * v_k[name] for name in lambda_k}
+
         client_weight_vector_k_plus_1=creat_weight_vector(self.model,self.m)
         client_G_weight_k_plus_1, _ =creat_g_matrix(i, self.clientsNum,self.m,client_weight_vector_k_plus_1)
+        # client_G_weight_k_plus_1=ClientsGroup.creat_y_k(self.clientsNum,self.m,client_G_vector_k_plus_1)
 
-        y_k_plus_1 =y_k + self.m*(client_G_weight_k_plus_1 - self.client_G_weight_k) 
+        y_k_plus_1 =y_k + self.m*(client_G_weight_k_plus_1 - self.client_G_weight_k) #{name: y_k[name] + self.m * (w_k_plus_1[name] - weights[name]) for name in y_k}
         sum_accu = 0
         num = 0
         
@@ -106,8 +135,17 @@ class Client():
         ACC_client=sum_accu / num
         print("\n")
         print(f'client ID : {self.client_ID}  accuracy: {ACC_client}')
+
+        # with torch.no_grad():
+        #     for name, param in self.model.named_parameters():
+        #         param.copy_(w_k_plus_1[name])
+
+        # lambda_k = lambda_k_plus_1
         self.client_G_weight_k=client_G_weight_k_plus_1
         return y_k_plus_1, lambda_k_plus_1 , ACC_client 
+
+
+        # return self.model.state_dict()
 
 
 class CustomOptimizer:
@@ -121,8 +159,33 @@ class CustomOptimizer:
         shp=0
         for p in self.parameters:
             if p.grad is not None:
+                # print("#"*80)
+                # print(p.data.shape)
+                # print(lamda[shp].shape)
                 p.data -= self.lr * (p.grad.data + lamda[shp])
                 shp += 1
+
+    # def step(self,lamda):
+    #     shp=0
+    #     for p in self.parameters:
+    #         if p.grad is not None:
+    #             cons=0
+    #             for i in self.index_list:
+    #                 if np.sign(i) == 0:
+    #                     cons=cons+lamda[np.abs(i)*self.m+shp].item()
+    #                 else :
+    #                     cons=cons+np.sign(i)*lamda[np.abs(i)*self.m+shp].item()
+    #             if len(p.grad.data.shape) ==2:
+    #                 for j in range((p.data).shape[0]):
+    #                     for k  in range((p.data).shape[1]):
+    #                         p.data[j][k] -= self.lr * (p.grad.data[j][k] + cons)
+    #                         shp+=1
+    #             else:
+    #                 for j in range((p.data).shape[0]):                      
+    #                         p.data[j] -= self.lr * (p.grad.data[j] + cons)
+    #                         shp+=1
+    #             # p.data -= self.lr * (p.grad.data + self.lambda_vector)
+
     def zero_grad(self):
         for p in self.parameters:
             if p.grad is not None:
@@ -136,7 +199,10 @@ def creat_weight_vector(net,m):
         wght=torch.zeros(m)
         for name, param in net.named_parameters():
             w=param.data.view(-1)
+            # print(param.data.view(-1))
+            # art=input()
             for j in w:
+                # print(j.item())
                 wght[shap]=j.item()
                 shap+=1
         return wght
@@ -144,11 +210,15 @@ def creat_weight_vector(net,m):
 def creat_y_k(n,m,g_matrix):
     y_k=torch.zeros(2*m*(n-1))
     for i in range(2*m*(n-1)):
+        #    index=int(i%m)
         y_k[i]= m*g_matrix[i].item()
     return y_k
 
 def creat_g_matrix(i,n,m,wi):
     g=[]
+    # wi=torch.ones([m])
+#     nwi=torch.ones([m])
+#     nwi=nwi*(-1)
     zero_matrix=torch.zeros([m])
     index_list=[]
     if i==0:
@@ -231,11 +301,12 @@ class ClientsGroup():
 
             localData, localLabel = trainData[i*subClientDataSize:(i+1)*subClientDataSize], trainLabel[i*subClientDataSize:(i+1)*subClientDataSize]
             weight_vector=creat_weight_vector(self.model,self.m)
-        
+
             G_vector, self.index_list =creat_g_matrix(i, self.clientsNum,self.m,weight_vector)
-        
+
             init_y=creat_y_k(self.clientsNum,self.m,G_vector)
-        
+            print(f'init_y : {init_y.shape}')
+
             self.init_y_k['client{}'.format(i)]=deepcopy(init_y)
             self.client_weight_vector['client{}'.format(i)]=deepcopy(weight_vector)
             self.client_G_vector['client{}'.format(i)]= deepcopy(G_vector)

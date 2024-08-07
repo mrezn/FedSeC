@@ -40,5 +40,28 @@ class GetDataSet():
             self.testData = torch.tensor(testData)
             self.testLabel = torch.tensor(testLabel)
 
+        elif self.dataSetName == 'CIFAR10':
+            trainData = []
+            trainLabel = []
+            trainTemp = datasets.CIFAR10(root="data", train=True, download=True, transform=ToTensor())
+            self.trainDataSize = len(trainTemp)
+            for i in range(len(trainTemp)):
+                trainData.append(trainTemp[i][0].numpy().tolist())
+                trainLabel.append(trainTemp[i][1])
+            testData = []
+            testLabel = []
+            testTemp = datasets.CIFAR10(root="data", train=False, download=True, transform=ToTensor())
+            self.testDataSize = len(testTemp)
+            for i in range(len(testTemp)):
+                testData.append(testTemp[i][0].numpy().tolist())
+                testLabel.append(testTemp[i][1])
+            self.trainData = torch.tensor(trainData)
+            self.trainLabel = torch.tensor(trainLabel)
+            self.testData = torch.tensor(testData)
+            self.testLabel = torch.tensor(testLabel)
+        
         else:
-            print("it is not valid dataset!")
+            print("Not valid dataset name!")
+
+        # self.trainData = DataLoader(trainingData, batch_size=self.trainDataSize)
+        # self.testData = DataLoader(testData, batch_size=self.testDataSize)
